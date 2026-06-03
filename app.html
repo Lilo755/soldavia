@@ -168,6 +168,14 @@ function expiringSoon(){const lim=new Date();lim.setDate(lim.getDate()+3);return
 function salesWeek(){return (DB.sales||[]).filter(s=>daysAgo(s.date,7));}
 function revenueWeek(){return salesWeek().reduce((a,s)=>{const r=DB.recipes.find(x=>x.id===s.recipeId);return a+(r?(r.price||0)*s.qty:0);},0);}
 function realFoodCost(){const sw=salesWeek();if(!sw.length)return null;let rev=0,cost=0;sw.forEach(s=>{const r=DB.recipes.find(x=>x.id===s.recipeId);if(r){rev+=(r.price||0)*s.qty;cost+=recipeCost(r)*s.qty;}});return rev>0?Math.round(cost/rev*100):null;}
+let dashP={mode:'7j',from:'',to:''};
+function dashRange(){const end=new Date();end.setHours(23,59,59,999);let start=new Date();if(dashP.mode==='7j'){start.setDate(start.getDate()-6);}else if(dashP.mode==='week'){const day=(start.getDay()+6)%7;start.setDate(start.getDate()-day);}else if(dashP.mode==='month'){start=new Date(start.getFullYear(),start.getMonth(),1);}else if(dashP.mode==='custom'){start=dashP.from?new Date(dashP.from):new Date(0);if(dashP.to){const e=new Date(dashP.to);e.setHours(23,59,59,999);end.setTime(e.getTime());}}start.setHours(0,0,0,0);return {start:start,end:end};}
+function inDash(ds){const d=new Date(ds);const r=dashRange();return d>=r.start&&d<=r.end;}
+function dashLabel(){return ({'7j':'7 derniers jours',week:'cette semaine',month:'ce mois',custom:'période choisie'})[dashP.mode];}
+function lossesP(){return DB.losses.filter(l=>inDash(l.date)).reduce((s,l)=>{const p=prod(l.productId);return s+(p?(p.price||0)*l.qty:0);},0);}
+function biodP(){return DB.biodechets.filter(b=>inDash(b.date)).reduce((s,b)=>s+(b.kg||0),0);}
+function salesP(){return (DB.sales||[]).filter(s=>inDash(s.date));}
+function realFoodCostP(){const sw=salesP();if(!sw.length)return null;let rev=0,cost=0;sw.forEach(s=>{const r=DB.recipes.find(x=>x.id===s.recipeId);if(r){rev+=(r.price||0)*s.qty;cost+=recipeCost(r)*s.qty;}});return rev>0?Math.round(cost/rev*100):null;}
 
 function renderNav(){
   document.getElementById("nav").innerHTML=TABS.map(t=>`<button class="${view===t[0]?'active':''}" data-act="tab" data-v="${t[0]}"><i class="ti ${t[2]}"></i><span>${t[1]}</span></button>`).join("");
@@ -202,14 +210,22 @@ function vOnboard(){
 
 /* dashboard */
 function vDash(){
-  const fc=avgFoodCost(),low=lowStock().length,rfc=realFoodCost(),exp=expiringSoon().length;
+  const fc=avgFoodCost(),low=lowStock().length,rfc=realFoodCostP(),exp=expiringSoon().length,pl=dashLabel();
   return head("Tableau de bord","Vue d'ensemble de "+esc(DB.settings.restaurant))+`
+  <div class="card" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px 18px;margin-bottom:18px;">
+    <span class="muted" style="font-weight:600;margin-right:4px;"><i class="ti ti-calendar"></i> Période :</span>
+    <button class="btn btn-sm ${dashP.mode==='7j'?'':'btn-ghost'}" data-act="dashPeriod" data-m="7j">7 derniers jours</button>
+    <button class="btn btn-sm ${dashP.mode==='week'?'':'btn-ghost'}" data-act="dashPeriod" data-m="week">Semaine en cours</button>
+    <button class="btn btn-sm ${dashP.mode==='month'?'':'btn-ghost'}" data-act="dashPeriod" data-m="month">Mois en cours</button>
+    <button class="btn btn-sm ${dashP.mode==='custom'?'':'btn-ghost'}" data-act="dashPeriod" data-m="custom">Personnalisé</button>
+    ${dashP.mode==='custom'?`<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="date" value="${dashP.from}" data-act="dashFrom" style="width:150px;"><span class="muted">→</span><input type="date" value="${dashP.to}" data-act="dashTo" style="width:150px;"></span>`:""}
+  </div>
   <div class="grid kpis" style="margin-bottom:22px;">
     <div class="kpi"><div class="ic" style="background:var(--green-l);color:var(--green-d)"><i class="ti ti-percentage"></i></div><div class="lbl">Coût matière moyen</div><div class="val">${fc==null?"—":fc+"%"}</div></div>
-    <div class="kpi"><div class="ic" style="background:#E6EFFB;color:#1B5FA8"><i class="ti ti-cash"></i></div><div class="lbl">Coût matière réel (7 j)</div><div class="val">${rfc==null?"—":rfc+"%"}</div></div>
+    <div class="kpi"><div class="ic" style="background:#E6EFFB;color:#1B5FA8"><i class="ti ti-cash"></i></div><div class="lbl">Coût matière réel · ${pl}</div><div class="val">${rfc==null?"—":rfc+"%"}</div></div>
     <div class="kpi"><div class="ic" style="background:#E6EFFB;color:#1B5FA8"><i class="ti ti-box"></i></div><div class="lbl">Valeur du stock</div><div class="val">${money(stockValue())}</div></div>
-    <div class="kpi"><div class="ic" style="background:var(--red-l);color:var(--red)"><i class="ti ti-trash"></i></div><div class="lbl">Gaspillage (7 j)</div><div class="val" style="color:var(--red)">${money(lossesWeek())}</div></div>
-    <div class="kpi"><div class="ic" style="background:var(--green-l);color:var(--green-d)"><i class="ti ti-leaf"></i></div><div class="lbl">Biodéchets (7 j)</div><div class="val" style="color:var(--green-d)">${num(biodWeek())} kg</div></div>
+    <div class="kpi"><div class="ic" style="background:var(--red-l);color:var(--red)"><i class="ti ti-trash"></i></div><div class="lbl">Gaspillage · ${pl}</div><div class="val" style="color:var(--red)">${money(lossesP())}</div></div>
+    <div class="kpi"><div class="ic" style="background:var(--green-l);color:var(--green-d)"><i class="ti ti-leaf"></i></div><div class="lbl">Biodéchets · ${pl}</div><div class="val" style="color:var(--green-d)">${num(biodP())} kg</div></div>
   </div>
   <div class="card"><h2><i class="ti ti-chart-line"></i> Tendances</h2>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
@@ -561,6 +577,7 @@ document.addEventListener("click",e=>{
   const v=s=>{const el=document.getElementById(s);return el?el.value:"";};
   switch(a){
     case"tab":edit={prod:null,sup:null};editRecId=null;view=t.dataset.v;render();break;
+    case"dashPeriod":dashP.mode=t.dataset.m;render();break;
     case"saveResto":{const n=v("resto").trim();if(!n){alert("Indiquez un nom.");return;}DB.settings.restaurant=n;save();view="dash";render();break;}
     case"demo":loadDemo();break;
     case"cancelEdit":edit={prod:null,sup:null};render();break;
@@ -616,6 +633,8 @@ document.addEventListener("click",e=>{
 document.addEventListener("input",e=>{
   const t=e.target.closest("[data-act]");if(!t)return;
   const a=t.dataset.act,id=t.dataset.id,i=t.dataset.i!=null?+t.dataset.i:null;
+  if(a==="dashFrom"){dashP.from=t.value;render();return;}
+  if(a==="dashTo"){dashP.to=t.value;render();return;}
   if(a==="filter"){const tb=document.getElementById(t.dataset.target);if(tb){const q=t.value.toLowerCase();tb.querySelectorAll("tbody tr").forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q)?"":"none";});}return;}
   if(a==="setStock"){const p=prod(id);if(p){p.stock=parseFloat(t.value)||0;save();}}
   else if(a==="invLineProd"){tmp.invLines[i].productId=t.value;const p=prod(t.value);if(p&&!tmp.invLines[i].price)tmp.invLines[i].price=p.price;paintInvLines();}
