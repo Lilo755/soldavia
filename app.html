@@ -92,6 +92,21 @@
   .muted{color:var(--muted);font-size:13px;}
   .banner{background:var(--green-l);color:var(--green-dd);border-radius:12px;padding:13px 16px;font-size:14px;display:flex;align-items:center;gap:9px;margin-bottom:16px;}
   .editing{background:var(--amber-l);color:var(--amber);border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;margin-bottom:14px;display:inline-flex;align-items:center;gap:7px;}
+  .datebtn{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid var(--line);border-radius:9px;padding:8px 12px;font-size:14px;cursor:pointer;color:var(--ink);font-family:inherit;}
+  .datebtn.act,.datebtn:hover{border-color:var(--green);}
+  .cal{position:absolute;top:48px;left:0;z-index:50;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 16px 40px -16px rgba(16,40,30,.35);padding:12px;width:286px;}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .cal-title{font-weight:600;font-size:14px;}
+  .cal-nav{background:transparent;border:none;cursor:pointer;color:var(--muted);padding:6px 9px;border-radius:8px;font-size:18px;}
+  .cal-nav:hover{background:var(--line);color:var(--ink);}
+  .cal-week{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;}
+  .cal-week span{text-align:center;font-size:11px;color:var(--faint);font-weight:600;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+  .cal-day{height:34px;border:none;background:transparent;border-radius:8px;cursor:pointer;font-size:13px;color:var(--ink);font-family:inherit;}
+  .cal-day:hover{background:var(--green-l);}
+  .cal-day.empty{visibility:hidden;cursor:default;}
+  .cal-day.today{outline:1.5px solid var(--green);outline-offset:-1px;}
+  .cal-day.sel{background:var(--green);color:#fff;font-weight:700;}
   #printArea{display:none;}
   @media print{body *{visibility:hidden;}#printArea,#printArea *{visibility:visible;}#printArea{display:block;position:absolute;left:0;top:0;width:100%;padding:30px;}}
   @media(max-width:860px){
@@ -172,6 +187,8 @@ let dashP={mode:'week',from:'',to:''};
 function dashRange(){const end=new Date();end.setHours(23,59,59,999);let start=new Date();if(dashP.mode==='7j'){start.setDate(start.getDate()-6);}else if(dashP.mode==='week'){const day=(start.getDay()+6)%7;start.setDate(start.getDate()-day);}else if(dashP.mode==='month'){start=new Date(start.getFullYear(),start.getMonth(),1);}else if(dashP.mode==='year'){start=new Date(start.getFullYear(),0,1);}else if(dashP.mode==='custom'){start=dashP.from?new Date(dashP.from):new Date(0);if(dashP.to){const e=new Date(dashP.to);e.setHours(23,59,59,999);end.setTime(e.getTime());}}start.setHours(0,0,0,0);return {start:start,end:end};}
 function inDash(ds){const d=new Date(ds);const r=dashRange();return d>=r.start&&d<=r.end;}
 function dashLabel(){return ({week:'cette semaine',month:'ce mois',year:'cette année',custom:'période choisie'})[dashP.mode];}
+let pick={open:null,y:new Date().getFullYear(),m:new Date().getMonth()};
+function calPopup(){const y=pick.y,m=pick.m;const names=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];const lead=(new Date(y,m,1).getDay()+6)%7;const nb=new Date(y,m+1,0).getDate();const sel=pick.open==='from'?dashP.from:dashP.to;const t0=today();let cells='';for(let i=0;i<lead;i++){cells+='<span class="cal-day empty"></span>';}for(let d=1;d<=nb;d++){const ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');const cls=(ds===sel?'sel ':'')+(ds===t0?'today ':'');cells+='<button class="cal-day '+cls+'" data-act="calPick" data-d="'+ds+'">'+d+'</button>';}return '<div class="cal"><div class="cal-head"><button class="cal-nav" data-act="calPrev"><i class="ti ti-chevron-left"></i></button><span class="cal-title">'+names[m]+' '+y+'</span><button class="cal-nav" data-act="calNext"><i class="ti ti-chevron-right"></i></button></div><div class="cal-week"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div><div class="cal-grid">'+cells+'</div></div>';}
 function lossesP(){return DB.losses.filter(l=>inDash(l.date)).reduce((s,l)=>{const p=prod(l.productId);return s+(p?(p.price||0)*l.qty:0);},0);}
 function biodP(){return DB.biodechets.filter(b=>inDash(b.date)).reduce((s,b)=>s+(b.kg||0),0);}
 function salesP(){return (DB.sales||[]).filter(s=>inDash(s.date));}
@@ -218,7 +235,7 @@ function vDash(){
     <button class="btn btn-sm ${dashP.mode==='month'?'':'btn-ghost'}" data-act="dashPeriod" data-m="month">Mois en cours</button>
     <button class="btn btn-sm ${dashP.mode==='year'?'':'btn-ghost'}" data-act="dashPeriod" data-m="year">Année en cours</button>
     <button class="btn btn-sm ${dashP.mode==='custom'?'':'btn-ghost'}" data-act="dashPeriod" data-m="custom">Personnalisé</button>
-    ${dashP.mode==='custom'?`<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="date" value="${dashP.from}" data-act="dashFrom" style="width:150px;"><span class="muted">→</span><input type="date" value="${dashP.to}" data-act="dashTo" style="width:150px;"></span>`:""}
+    ${dashP.mode==='custom'?`<span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative;"><button class="datebtn ${pick.open==='from'?'act':''}" data-act="calOpen" data-f="from"><i class="ti ti-calendar"></i> ${dashP.from?fr(dashP.from):'Début'}</button><span class="muted">→</span><button class="datebtn ${pick.open==='to'?'act':''}" data-act="calOpen" data-f="to"><i class="ti ti-calendar"></i> ${dashP.to?fr(dashP.to):'Fin'}</button>${(dashP.from||dashP.to)?`<button class="btn btn-sm btn-ghost" data-act="dashClear"><i class="ti ti-x"></i> Effacer</button>`:""}${pick.open?calPopup():""}</span>`:""}
   </div>
   <div class="grid kpis" style="margin-bottom:22px;">
     <div class="kpi"><div class="ic" style="background:var(--green-l);color:var(--green-d)"><i class="ti ti-percentage"></i></div><div class="lbl">Coût matière moyen</div><div class="val">${fc==null?"—":fc+"%"}</div></div>
@@ -577,7 +594,12 @@ document.addEventListener("click",e=>{
   const v=s=>{const el=document.getElementById(s);return el?el.value:"";};
   switch(a){
     case"tab":edit={prod:null,sup:null};editRecId=null;view=t.dataset.v;render();break;
-    case"dashPeriod":dashP.mode=t.dataset.m;render();break;
+    case"dashPeriod":dashP.mode=t.dataset.m;pick.open=null;render();break;
+    case"calOpen":{const f=t.dataset.f;if(pick.open===f){pick.open=null;}else{pick.open=f;const base=f==='from'?dashP.from:dashP.to;const d=base?new Date(base):new Date();pick.y=d.getFullYear();pick.m=d.getMonth();}render();break;}
+    case"calPrev":pick.m--;if(pick.m<0){pick.m=11;pick.y--;}render();break;
+    case"calNext":pick.m++;if(pick.m>11){pick.m=0;pick.y++;}render();break;
+    case"calPick":if(pick.open==='from'){dashP.from=t.dataset.d;}else{dashP.to=t.dataset.d;}pick.open=null;render();break;
+    case"dashClear":dashP.from='';dashP.to='';pick.open=null;render();break;
     case"saveResto":{const n=v("resto").trim();if(!n){alert("Indiquez un nom.");return;}DB.settings.restaurant=n;save();view="dash";render();break;}
     case"demo":loadDemo();break;
     case"cancelEdit":edit={prod:null,sup:null};render();break;
