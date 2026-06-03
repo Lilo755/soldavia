@@ -92,6 +92,7 @@
   .muted{color:var(--muted);font-size:13px;}
   .banner{background:var(--green-l);color:var(--green-dd);border-radius:12px;padding:13px 16px;font-size:14px;display:flex;align-items:center;gap:9px;margin-bottom:16px;}
   .editing{background:var(--amber-l);color:var(--amber);border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;margin-bottom:14px;display:inline-flex;align-items:center;gap:7px;}
+  .navgroup{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.45);font-weight:700;padding:14px 12px 6px;}
   .datebtn{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1.5px solid var(--line);border-radius:9px;padding:8px 12px;font-size:14px;cursor:pointer;color:var(--ink);font-family:inherit;}
   .datebtn.act,.datebtn:hover{border-color:var(--green);}
   .cal{position:absolute;top:48px;left:0;z-index:50;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 16px 40px -16px rgba(16,40,30,.35);padding:12px;width:286px;}
@@ -138,21 +139,23 @@ const KEY="mijote_db_v2";
 const REASONS=["Périmé","Abîmé","Invendu","Erreur de prépa","Casse"];
 const CATS=["Légumes","Fruits","Viande","Poisson","Crémerie","Épicerie","Boisson","Autre"];
 const TABS=[
- ["dash","Tableau de bord","ti-layout-dashboard"],
- ["stock","Stock & inventaire","ti-building-warehouse"],
- ["products","Produits","ti-tag"],
- ["suppliers","Fournisseurs","ti-truck"],
- ["invoices","Factures","ti-file-invoice"],
- ["orders","Commandes","ti-shopping-cart"],
- ["recipes","Recettes","ti-chef-hat"],
- ["sales","Ventes","ti-cash-register"],
- ["losses","Pertes","ti-trash"],
- ["comp","Conformité","ti-leaf"],
- ["settings","Réglages","ti-settings"],
+ ["ops","Vue d'ensemble","ti-layout-dashboard","ops"],
+ ["stock","Stock & inventaire","ti-building-warehouse","ops"],
+ ["products","Produits","ti-tag","ops"],
+ ["suppliers","Fournisseurs","ti-truck","ops"],
+ ["invoices","Factures","ti-file-invoice","ops"],
+ ["orders","Commandes","ti-shopping-cart","ops"],
+ ["losses","Pertes","ti-trash","ops"],
+ ["comp","Conformité","ti-leaf","ops"],
+ ["settings","Réglages","ti-settings","ops"],
+ ["fin","Tableau de bord","ti-chart-line","fin"],
+ ["recipes","Recettes","ti-chef-hat","fin"],
+ ["sales","Ventes","ti-cash-register","fin"],
 ];
 
 let DB=load();
-let view="dash";
+let view="ops";
+let finOpen=false;
 let tmp={invLines:[],recLines:[],orderQty:{}};
 let edit={prod:null,sup:null};
 let editRecId=null;
@@ -193,19 +196,24 @@ function lossesP(){return DB.losses.filter(l=>inDash(l.date)).reduce((s,l)=>{con
 function biodP(){return DB.biodechets.filter(b=>inDash(b.date)).reduce((s,b)=>s+(b.kg||0),0);}
 function salesP(){return (DB.sales||[]).filter(s=>inDash(s.date));}
 function realFoodCostP(){const sw=salesP();if(!sw.length)return null;let rev=0,cost=0;sw.forEach(s=>{const r=DB.recipes.find(x=>x.id===s.recipeId);if(r){rev+=(r.price||0)*s.qty;cost+=recipeCost(r)*s.qty;}});return rev>0?Math.round(cost/rev*100):null;}
+function revenueP(){return salesP().reduce((a,s)=>{const r=DB.recipes.find(x=>x.id===s.recipeId);return a+(r?(r.price||0)*s.qty:0);},0);}
 
 function renderNav(){
-  document.getElementById("nav").innerHTML=TABS.map(t=>`<button class="${view===t[0]?'active':''}" data-act="tab" data-v="${t[0]}"><i class="ti ${t[2]}"></i><span>${t[1]}</span></button>`).join("");
+  const _g=g=>TABS.filter(t=>t[3]===g).map(t=>`<button class="${view===t[0]?'active':''}" data-act="tab" data-v="${t[0]}"><i class="ti ${t[2]}"></i><span>${t[1]}</span></button>`).join("");
+  const _lock=(DB.settings.financePin&&!finOpen)?' <i class="ti ti-lock" style="font-size:12px;"></i>':'';
+  document.getElementById("nav").innerHTML=`<div class="navgroup">Opérations</div>`+_g("ops")+`<div class="navgroup">Finances${_lock}</div>`+_g("fin");
   document.getElementById("restoName").textContent=DB.settings.restaurant||"";
   const br=document.getElementById("brand");if(br)br.innerHTML=(DB.settings.logo?`<img src="${DB.settings.logo}" alt="" style="height:26px;border-radius:6px;vertical-align:middle;margin-right:6px;">`:`<svg width="24" height="24" viewBox="0 0 52 52" style="vertical-align:middle;margin-right:7px"><rect x="2" y="2" width="48" height="48" rx="13" fill="#15926C"/><text x="26" y="36" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="31" font-weight="700" fill="#fff">S</text></svg>`)+"Soldavia";
 }
 function render(){
   if(!DB.settings.restaurant)view="onboard";
+  const _tab=TABS.find(t=>t[0]===view);const _locked=DB.settings.financePin&&!finOpen;
+  if(_tab&&_tab[3]==='fin'&&_locked){renderNav();document.getElementById("content").innerHTML=vLock();return;}
   renderNav();
-  document.getElementById("content").innerHTML=({onboard:vOnboard,dash:vDash,stock:vStock,products:vProducts,suppliers:vSuppliers,invoices:vInvoices,orders:vOrders,recipes:vRecipes,sales:vSales,losses:vLosses,comp:vComp,settings:vSettings}[view]||vDash)();
+  document.getElementById("content").innerHTML=({onboard:vOnboard,ops:vOps,fin:vFin,stock:vStock,products:vProducts,suppliers:vSuppliers,invoices:vInvoices,orders:vOrders,recipes:vRecipes,sales:vSales,losses:vLosses,comp:vComp,settings:vSettings}[view]||vOps)();
   if(view==="invoices")paintInvLines();
   if(view==="recipes")paintRecLines();
-  if(view==="dash")drawDash();
+  if(view==="fin")drawDash();
 }
 function head(t,s){return `<div class="phead"><h1>${t}</h1>${s?`<p>${s}</p>`:""}</div>`;}
 
@@ -226,9 +234,8 @@ function vOnboard(){
 }
 
 /* dashboard */
-function vDash(){
-  const fc=avgFoodCost(),low=lowStock().length,rfc=realFoodCostP(),exp=expiringSoon().length,pl=dashLabel();
-  return head("Tableau de bord","Vue d'ensemble de "+esc(DB.settings.restaurant))+`
+function periodBar(){
+  return `
   <div class="card" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px 18px;margin-bottom:18px;">
     <span class="muted" style="font-weight:600;margin-right:4px;"><i class="ti ti-calendar"></i> Période :</span>
     <button class="btn btn-sm ${dashP.mode==='week'?'':'btn-ghost'}" data-act="dashPeriod" data-m="week">Semaine en cours</button>
@@ -236,19 +243,16 @@ function vDash(){
     <button class="btn btn-sm ${dashP.mode==='year'?'':'btn-ghost'}" data-act="dashPeriod" data-m="year">Année en cours</button>
     <button class="btn btn-sm ${dashP.mode==='custom'?'':'btn-ghost'}" data-act="dashPeriod" data-m="custom">Personnalisé</button>
     ${dashP.mode==='custom'?`<span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative;"><button class="datebtn ${pick.open==='from'?'act':''}" data-act="calOpen" data-f="from"><i class="ti ti-calendar"></i> ${dashP.from?fr(dashP.from):'Début'}</button><span class="muted">→</span><button class="datebtn ${pick.open==='to'?'act':''}" data-act="calOpen" data-f="to"><i class="ti ti-calendar"></i> ${dashP.to?fr(dashP.to):'Fin'}</button>${(dashP.from||dashP.to)?`<button class="btn btn-sm btn-ghost" data-act="dashClear"><i class="ti ti-x"></i> Effacer</button>`:""}${pick.open?calPopup():""}</span>`:""}
-  </div>
+  </div>`;
+}
+function vOps(){
+  const low=lowStock().length,exp=expiringSoon().length,pl=dashLabel();
+  return head("Vue d'ensemble","Opérations de "+esc(DB.settings.restaurant))+periodBar()+`
   <div class="grid kpis" style="margin-bottom:22px;">
-    <div class="kpi"><div class="ic" style="background:var(--green-l);color:var(--green-d)"><i class="ti ti-percentage"></i></div><div class="lbl">Coût matière moyen</div><div class="val">${fc==null?"—":fc+"%"}</div></div>
-    <div class="kpi"><div class="ic" style="background:#E6EFFB;color:#1B5FA8"><i class="ti ti-cash"></i></div><div class="lbl">Coût matière réel · ${pl}</div><div class="val">${rfc==null?"—":rfc+"%"}</div></div>
     <div class="kpi"><div class="ic" style="background:#E6EFFB;color:#1B5FA8"><i class="ti ti-box"></i></div><div class="lbl">Valeur du stock</div><div class="val">${money(stockValue())}</div></div>
     <div class="kpi"><div class="ic" style="background:var(--red-l);color:var(--red)"><i class="ti ti-trash"></i></div><div class="lbl">Gaspillage · ${pl}</div><div class="val" style="color:var(--red)">${money(lossesP())}</div></div>
     <div class="kpi"><div class="ic" style="background:var(--green-l);color:var(--green-d)"><i class="ti ti-leaf"></i></div><div class="lbl">Biodéchets · ${pl}</div><div class="val" style="color:var(--green-d)">${num(biodP())} kg</div></div>
-  </div>
-  <div class="card"><h2><i class="ti ti-chart-line"></i> Tendances</h2>
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
-      <div><div class="muted" style="margin-bottom:6px;">Pertes (7 derniers jours)</div><canvas id="chLoss" height="160"></canvas></div>
-      <div><div class="muted" style="margin-bottom:6px;">Coût matière par recette (%)</div><canvas id="chFc" height="160"></canvas></div>
-    </div>
+    <div class="kpi"><div class="ic" style="background:var(--amber-l);color:var(--amber)"><i class="ti ti-alert-triangle"></i></div><div class="lbl">Produits en alerte</div><div class="val">${low}</div></div>
   </div>
   <div class="card"><h2><i class="ti ti-bell"></i> Alertes</h2>
     ${low?`<div class="banner" style="background:var(--red-l);color:var(--red)"><i class="ti ti-alert-triangle"></i> ${low} produit(s) en stock bas <button class="btn btn-sm btn-soft" style="margin-left:auto;" data-act="tab" data-v="stock">Voir</button></div>`:`<div class="banner"><i class="ti ti-circle-check"></i> Tous les stocks sont au-dessus du seuil.</div>`}
@@ -260,14 +264,32 @@ function vDash(){
     ${biodWeek()>0?"":`<div class="banner" style="background:var(--amber-l);color:var(--amber);margin-bottom:8px;"><i class="ti ti-leaf"></i> Pensez à relever vos biodéchets cette semaine.</div>`}
     ${low?`<div class="banner low" style="margin-bottom:8px;"><i class="ti ti-shopping-cart"></i> ${low} produit(s) à réapprovisionner <button class="btn btn-sm btn-soft" style="margin-left:auto;" data-act="tab" data-v="orders">Commander</button></div>`:""}
     <div class="banner" style="background:var(--bg);color:var(--ink);margin-bottom:0;"><i class="ti ti-trash"></i> Déclarez les pertes du jour (onglet Pertes).</div>
+  </div>`;
+}
+function vFin(){
+  const fc=avgFoodCost(),rfc=realFoodCostP(),pl=dashLabel(),sw=salesP();
+  return head("Tableau de bord — Finances","Marges & rentabilité de "+esc(DB.settings.restaurant))+periodBar()+`
+  <div class="grid kpis" style="margin-bottom:22px;">
+    <div class="kpi"><div class="ic" style="background:var(--green-l);color:var(--green-d)"><i class="ti ti-percentage"></i></div><div class="lbl">Coût matière moyen</div><div class="val">${fc==null?"—":fc+"%"}</div></div>
+    <div class="kpi"><div class="ic" style="background:#E6EFFB;color:#1B5FA8"><i class="ti ti-cash"></i></div><div class="lbl">Coût matière réel · ${pl}</div><div class="val">${rfc==null?"—":rfc+"%"}</div></div>
+    <div class="kpi"><div class="ic" style="background:var(--green-l);color:var(--green-d)"><i class="ti ti-cash"></i></div><div class="lbl">Chiffre d'affaires · ${pl}</div><div class="val">${money(revenueP())}</div></div>
+    <div class="kpi"><div class="ic" style="background:#E6EFFB;color:#1B5FA8"><i class="ti ti-receipt"></i></div><div class="lbl">Plats vendus · ${pl}</div><div class="val">${sw.reduce((a,s)=>a+s.qty,0)}</div></div>
   </div>
-  <div class="card"><h2><i class="ti ti-rocket"></i> Pour bien démarrer</h2>
-    <ol style="padding-left:18px;color:var(--muted);font-size:14px;line-height:2.1;">
-      <li>Ajoutez vos <b>fournisseurs</b> puis vos <b>produits</b>.</li>
-      <li>Saisissez une <b>facture</b> : le stock se met à jour automatiquement.</li>
-      <li>Créez vos <b>recettes</b> pour voir vos marges.</li>
-      <li>Déclarez vos <b>pertes</b> et tenez le registre <b>conformité</b>.</li>
-    </ol>
+  <div class="card"><h2><i class="ti ti-chart-line"></i> Tendances</h2>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));">
+      <div><div class="muted" style="margin-bottom:6px;">Pertes (7 derniers jours)</div><canvas id="chLoss" height="160"></canvas></div>
+      <div><div class="muted" style="margin-bottom:6px;">Coût matière par recette (%)</div><canvas id="chFc" height="160"></canvas></div>
+    </div>
+  </div>`;
+}
+function vLock(){
+  return head("Finances","Accès protégé")+`
+  <div class="card" style="max-width:420px;margin:24px auto;text-align:center;">
+    <div style="font-size:36px;color:var(--green);"><i class="ti ti-lock"></i></div>
+    <h2 style="justify-content:center;">Espace Finances protégé</h2>
+    <p class="muted" style="margin-bottom:16px;">Entrez le code d'accès défini par le responsable.</p>
+    <div class="field" style="max-width:200px;margin:0 auto;"><input id="finPin" type="password" inputmode="numeric" placeholder="Code" style="text-align:center;font-size:20px;letter-spacing:4px;"></div>
+    <div class="form-actions" style="justify-content:center;"><button class="btn" data-act="finUnlock"><i class="ti ti-lock-open"></i> Déverrouiller</button></div>
   </div>`;
 }
 
@@ -501,6 +523,7 @@ function vSettings(){
     <div class="field" style="margin-top:14px;"><label>Adresse / SIRET (affiché sur les documents)</label><input id="setAddr" value="${esc(DB.settings.address||'')}"></div>
     <div class="field" style="margin-top:14px;"><label>Logo (image, optionnel)</label><input id="setLogo" type="file" accept="image/*" data-act="logoFile"></div>
     ${DB.settings.logo?`<img src="${DB.settings.logo}" alt="logo" style="height:46px;margin-top:10px;border-radius:8px;">`:""}
+    <div class="field" style="margin-top:14px;max-width:260px;"><label>Code d'accès Finances (PIN)</label><input id="setFinPin" type="text" inputmode="numeric" placeholder="ex. 1234 (laisser vide = libre)" value="${esc(DB.settings.financePin||'')}"></div>
     <div class="form-actions"><button class="btn" data-act="saveSet"><i class="ti ti-device-floppy"></i> Enregistrer</button></div></div>
   <div class="card"><h2><i class="ti ti-database"></i> Données</h2>
     <p class="muted" style="margin-bottom:14px;">Vos données sont enregistrées dans ce navigateur uniquement.</p>
@@ -545,7 +568,7 @@ function loadDemo(){
   DB.losses.push({id:uid(),date:today(),productId:p["Basilic"],qty:1,reason:"Périmé"});
   DB.losses.push({id:uid(),date:today(),productId:p["Tomates"],qty:0.8,reason:"Abîmé"});
   DB.biodechets.push({id:uid(),date:today(),kg:6.2});DB.biodechets.push({id:uid(),date:today(),kg:8.0});
-  edit={prod:null,sup:null};save();view="dash";render();
+  edit={prod:null,sup:null};save();view="ops";render();
 }
 
 let _chartObjs=[];
@@ -600,7 +623,8 @@ document.addEventListener("click",e=>{
     case"calNext":pick.m++;if(pick.m>11){pick.m=0;pick.y++;}render();break;
     case"calPick":if(pick.open==='from'){dashP.from=t.dataset.d;}else{dashP.to=t.dataset.d;}pick.open=null;render();break;
     case"dashClear":dashP.from='';dashP.to='';pick.open=null;render();break;
-    case"saveResto":{const n=v("resto").trim();if(!n){alert("Indiquez un nom.");return;}DB.settings.restaurant=n;save();view="dash";render();break;}
+    case"finUnlock":{const pin=(document.getElementById("finPin")||{}).value;if(pin===DB.settings.financePin){finOpen=true;render();}else{alert("Code incorrect.");}break;}
+    case"saveResto":{const n=v("resto").trim();if(!n){alert("Indiquez un nom.");return;}DB.settings.restaurant=n;save();view="ops";render();break;}
     case"demo":loadDemo();break;
     case"cancelEdit":edit={prod:null,sup:null};render();break;
     case"addProd":{const n=v("pName").trim();if(!n){alert("Le nom du produit est requis.");return;}
@@ -647,7 +671,7 @@ document.addEventListener("click",e=>{
     case"addBiod":{const k=parseFloat(v("bKg"));if(!k){alert("Indiquez un poids.");return;}DB.biodechets.push({id:uid(),date:v("bDate")||today(),kg:k});save();render();break;}
     case"delBiod":DB.biodechets=DB.biodechets.filter(x=>x.id!==id);save();render();break;
     case"printReg":printRegister();break;
-    case"saveSet":{const n=v("setName").trim();if(n)DB.settings.restaurant=n;DB.settings.currency=v("setCur")||"€";DB.settings.address=v("setAddr");save();render();alert("Enregistré ✔");break;}
+    case"saveSet":{const n=v("setName").trim();if(n)DB.settings.restaurant=n;DB.settings.currency=v("setCur")||"€";DB.settings.address=v("setAddr");DB.settings.financePin=v("setFinPin").trim();save();render();alert("Enregistré ✔");break;}
     case"export":{const blob=new Blob([JSON.stringify(DB,null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a2=document.createElement("a");a2.href=u;a2.download="mijote-sauvegarde.json";a2.click();break;}
     case"reset":if(confirm("Effacer toutes les données ?")){localStorage.removeItem(KEY);DB=load();edit={prod:null,sup:null};view="onboard";render();}break;
   }
