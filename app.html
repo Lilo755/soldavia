@@ -168,10 +168,10 @@ function expiringSoon(){const lim=new Date();lim.setDate(lim.getDate()+3);return
 function salesWeek(){return (DB.sales||[]).filter(s=>daysAgo(s.date,7));}
 function revenueWeek(){return salesWeek().reduce((a,s)=>{const r=DB.recipes.find(x=>x.id===s.recipeId);return a+(r?(r.price||0)*s.qty:0);},0);}
 function realFoodCost(){const sw=salesWeek();if(!sw.length)return null;let rev=0,cost=0;sw.forEach(s=>{const r=DB.recipes.find(x=>x.id===s.recipeId);if(r){rev+=(r.price||0)*s.qty;cost+=recipeCost(r)*s.qty;}});return rev>0?Math.round(cost/rev*100):null;}
-let dashP={mode:'7j',from:'',to:''};
-function dashRange(){const end=new Date();end.setHours(23,59,59,999);let start=new Date();if(dashP.mode==='7j'){start.setDate(start.getDate()-6);}else if(dashP.mode==='week'){const day=(start.getDay()+6)%7;start.setDate(start.getDate()-day);}else if(dashP.mode==='month'){start=new Date(start.getFullYear(),start.getMonth(),1);}else if(dashP.mode==='custom'){start=dashP.from?new Date(dashP.from):new Date(0);if(dashP.to){const e=new Date(dashP.to);e.setHours(23,59,59,999);end.setTime(e.getTime());}}start.setHours(0,0,0,0);return {start:start,end:end};}
+let dashP={mode:'week',from:'',to:''};
+function dashRange(){const end=new Date();end.setHours(23,59,59,999);let start=new Date();if(dashP.mode==='7j'){start.setDate(start.getDate()-6);}else if(dashP.mode==='week'){const day=(start.getDay()+6)%7;start.setDate(start.getDate()-day);}else if(dashP.mode==='month'){start=new Date(start.getFullYear(),start.getMonth(),1);}else if(dashP.mode==='year'){start=new Date(start.getFullYear(),0,1);}else if(dashP.mode==='custom'){start=dashP.from?new Date(dashP.from):new Date(0);if(dashP.to){const e=new Date(dashP.to);e.setHours(23,59,59,999);end.setTime(e.getTime());}}start.setHours(0,0,0,0);return {start:start,end:end};}
 function inDash(ds){const d=new Date(ds);const r=dashRange();return d>=r.start&&d<=r.end;}
-function dashLabel(){return ({'7j':'7 derniers jours',week:'cette semaine',month:'ce mois',custom:'période choisie'})[dashP.mode];}
+function dashLabel(){return ({week:'cette semaine',month:'ce mois',year:'cette année',custom:'période choisie'})[dashP.mode];}
 function lossesP(){return DB.losses.filter(l=>inDash(l.date)).reduce((s,l)=>{const p=prod(l.productId);return s+(p?(p.price||0)*l.qty:0);},0);}
 function biodP(){return DB.biodechets.filter(b=>inDash(b.date)).reduce((s,b)=>s+(b.kg||0),0);}
 function salesP(){return (DB.sales||[]).filter(s=>inDash(s.date));}
@@ -214,9 +214,9 @@ function vDash(){
   return head("Tableau de bord","Vue d'ensemble de "+esc(DB.settings.restaurant))+`
   <div class="card" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px 18px;margin-bottom:18px;">
     <span class="muted" style="font-weight:600;margin-right:4px;"><i class="ti ti-calendar"></i> Période :</span>
-    <button class="btn btn-sm ${dashP.mode==='7j'?'':'btn-ghost'}" data-act="dashPeriod" data-m="7j">7 derniers jours</button>
     <button class="btn btn-sm ${dashP.mode==='week'?'':'btn-ghost'}" data-act="dashPeriod" data-m="week">Semaine en cours</button>
     <button class="btn btn-sm ${dashP.mode==='month'?'':'btn-ghost'}" data-act="dashPeriod" data-m="month">Mois en cours</button>
+    <button class="btn btn-sm ${dashP.mode==='year'?'':'btn-ghost'}" data-act="dashPeriod" data-m="year">Année en cours</button>
     <button class="btn btn-sm ${dashP.mode==='custom'?'':'btn-ghost'}" data-act="dashPeriod" data-m="custom">Personnalisé</button>
     ${dashP.mode==='custom'?`<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><input type="date" value="${dashP.from}" data-act="dashFrom" style="width:150px;"><span class="muted">→</span><input type="date" value="${dashP.to}" data-act="dashTo" style="width:150px;"></span>`:""}
   </div>
