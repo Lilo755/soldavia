@@ -1,0 +1,8 @@
+{
+  "name": "soldavia",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "mindee": "^5.1.1"
+  }
+}
