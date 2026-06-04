@@ -390,7 +390,9 @@ function vInvoices(){
     <div style="margin-top:18px;"><div class="lines-head"><span style="flex:2;">Produit</span><span style="flex:1;">Quantité</span><span style="flex:1;">Prix unit. (€)</span><span style="flex:0 0 44px;"></span></div>
       <div id="invLines"></div>
       <button class="btn btn-ghost btn-sm" data-act="addInvLine" style="margin-top:8px;"><i class="ti ti-plus"></i> Ajouter une ligne</button>
-      <button class="btn btn-soft btn-sm" data-act="scanInv" style="margin-top:8px;margin-left:6px;"><i class="ti ti-camera"></i> Simuler un scan</button>
+      <label class="btn btn-soft btn-sm" style="margin-top:8px;margin-left:6px;cursor:pointer;"><i class="ti ti-camera"></i> Scanner une facture (photo)<input type="file" accept="image/*" capture="environment" data-act="scanFile" style="display:none;"></label>
+      <button class="btn btn-ghost btn-sm" data-act="scanInv" style="margin-top:8px;margin-left:6px;"><i class="ti ti-wand"></i> Démo</button>
+      <div id="scanStatus" class="muted" style="margin-top:10px;font-size:13px;"></div>
     </div>
     <div class="flex-between" style="margin-top:18px;"><span class="muted">Total : <b id="invTotal" style="font-size:16px;color:var(--ink);">0,00 €</b></span>
       <button class="btn" data-act="saveInv"><i class="ti ti-device-floppy"></i> Enregistrer & mettre à jour le stock</button></div>
@@ -698,7 +700,33 @@ document.addEventListener("input",e=>{
   else if(a==="orderQty"){tmp.orderQty[id]=parseFloat(t.value)||0;const p=prod(id),cell=t.closest("tr")?t.closest("tr").lastElementChild:null;if(p&&cell)cell.textContent=money((p.price||0)*tmp.orderQty[id]);}
   else if(t.id==="rPrice")paintRecLines();
 });
+function matchProduct(name){if(!name)return '';const n=String(name).toLowerCase().trim();if(!n)return '';const p=DB.products.find(p=>{const pn=(p.name||'').toLowerCase();return pn&&(pn.includes(n)||n.includes(pn));});return p?p.id:'';}
+function fillFromScan(d,status){
+  const lines=(d.lines||[]).filter(l=>l&&(l.qty||l.price||l.name));
+  if(lines.length)tmp.invLines=lines.map(l=>({productId:matchProduct(l.name),qty:Number(l.qty)||0,price:Number(l.price)||0}));
+  if(d.date){const hid=document.getElementById("iDate");if(hid){hid.value=d.date;const lbl=document.getElementById("iDateLbl");if(lbl)lbl.textContent=fr(d.date);}}
+  paintInvLines();
+  if(status)status.textContent=lines.length?(lines.length+" ligne(s) détectée(s) — vérifiez puis enregistrez."):"Aucune ligne détectée sur la photo.";
+}
+function runScan(file){
+  const status=document.getElementById("scanStatus");if(status)status.textContent="Analyse de la facture en cours…";
+  const send=dataUrl=>{
+    fetch("/api/scan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image:dataUrl})})
+    .then(r=>r.json().then(d=>({ok:r.ok,d}))).then(o=>{
+      if(!o.ok||o.d.error){if(status)status.textContent="Scan indisponible ("+(o.d&&o.d.error?o.d.error:"configuration manquante")+"). Saisie manuelle possible.";return;}
+      fillFromScan(o.d,status);
+    }).catch(()=>{if(status)status.textContent="Échec du scan (réseau/serveur). Saisie manuelle possible.";});
+  };
+  try{
+    const img=new Image();const url=URL.createObjectURL(file);
+    img.onload=()=>{const max=1600;let w=img.width,h=img.height;if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
+      const cv=document.createElement("canvas");cv.width=w;cv.height=h;cv.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);send(cv.toDataURL("image/jpeg",0.8));};
+    img.onerror=()=>{const rd=new FileReader();rd.onload=()=>send(rd.result);rd.readAsDataURL(file);};
+    img.src=url;
+  }catch(e){const rd=new FileReader();rd.onload=()=>send(rd.result);rd.readAsDataURL(file);}
+}
 document.addEventListener("change",e=>{
+  const sf=e.target.closest("[data-act='scanFile']");if(sf&&sf.files&&sf.files[0]){runScan(sf.files[0]);sf.value="";return;}
   const t=e.target.closest("[data-act='logoFile']");if(!t||!t.files||!t.files[0])return;
   const rd=new FileReader();rd.onload=()=>{DB.settings.logo=rd.result;save();render();};rd.readAsDataURL(t.files[0]);
 });
