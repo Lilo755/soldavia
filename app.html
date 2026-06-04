@@ -191,6 +191,9 @@ function dashRange(){const end=new Date();end.setHours(23,59,59,999);let start=n
 function inDash(ds){const d=new Date(ds);const r=dashRange();return d>=r.start&&d<=r.end;}
 function dashLabel(){return ({week:'cette semaine',month:'ce mois',year:'cette année',custom:'période choisie'})[dashP.mode];}
 let pick={open:null,y:new Date().getFullYear(),m:new Date().getMonth()};
+let pdlc={y:new Date().getFullYear(),m:new Date().getMonth()};
+function pdlcDraw(){const box=document.getElementById('pDlcCal');if(!box)return;const hid=document.getElementById('pDlc');const sel=hid?hid.value:'';const y=pdlc.y,m=pdlc.m;const names=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];const lead=(new Date(y,m,1).getDay()+6)%7;const nb=new Date(y,m+1,0).getDate();const t0=today();let cells='';for(let i=0;i<lead;i++){cells+='<span class="cal-day empty"></span>';}for(let d=1;d<=nb;d++){const ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');const cls=(ds===sel?'sel ':'')+(ds===t0?'today ':'');cells+='<button type="button" class="cal-day '+cls+'" data-act="pdlcPick" data-d="'+ds+'">'+d+'</button>';}box.innerHTML='<div class="cal"><div class="cal-head"><button type="button" class="cal-nav" data-act="pdlcPrev"><i class="ti ti-chevron-left"></i></button><span class="cal-title">'+names[m]+' '+y+'</span><button type="button" class="cal-nav" data-act="pdlcNext"><i class="ti ti-chevron-right"></i></button></div><div class="cal-week"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div><div class="cal-grid">'+cells+'</div></div>';}
+function pdlcOpen(){const hid=document.getElementById('pDlc');const base=hid&&hid.value?new Date(hid.value):new Date();pdlc.y=base.getFullYear();pdlc.m=base.getMonth();const box=document.getElementById('pDlcCal');if(box){box.style.display='block';pdlcDraw();}}
 function calPopup(){const y=pick.y,m=pick.m;const names=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];const lead=(new Date(y,m,1).getDay()+6)%7;const nb=new Date(y,m+1,0).getDate();const sel=pick.open==='from'?dashP.from:dashP.to;const t0=today();let cells='';for(let i=0;i<lead;i++){cells+='<span class="cal-day empty"></span>';}for(let d=1;d<=nb;d++){const ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');const cls=(ds===sel?'sel ':'')+(ds===t0?'today ':'');cells+='<button class="cal-day '+cls+'" data-act="calPick" data-d="'+ds+'">'+d+'</button>';}return '<div class="cal"><div class="cal-head"><button class="cal-nav" data-act="calPrev"><i class="ti ti-chevron-left"></i></button><span class="cal-title">'+names[m]+' '+y+'</span><button class="cal-nav" data-act="calNext"><i class="ti ti-chevron-right"></i></button></div><div class="cal-week"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div><div class="cal-grid">'+cells+'</div></div>';}
 function lossesP(){return DB.losses.filter(l=>inDash(l.date)).reduce((s,l)=>{const p=prod(l.productId);return s+(p?(p.price||0)*l.qty:0);},0);}
 function biodP(){return DB.biodechets.filter(b=>inDash(b.date)).reduce((s,b)=>s+(b.kg||0),0);}
@@ -333,7 +336,7 @@ function vProducts(){
       <div class="field narrow"><label>Seuil d'alerte</label><input id="pThr" type="number" step="0.01" placeholder="2" value="${e?e.threshold:""}"></div>
       <div class="field"><label>Fournisseur</label><select id="pSup"><option value="">— Aucun —</option>${supOpts}</select></div>
     </div>
-    <div class="row" style="margin-top:14px;"><div class="field narrow"><label>Péremption (DLC)</label><input id="pDlc" type="date" value="${e&&e.dlc?e.dlc:''}"></div><div style="flex:3;"></div></div>
+    <div class="row" style="margin-top:14px;"><div class="field" style="position:relative;flex:0 0 200px;min-width:180px;"><label>Péremption (DLC)</label><input type="hidden" id="pDlc" value="${e&&e.dlc?e.dlc:''}"><button type="button" class="datebtn" data-act="pdlcToggle" style="width:100%;justify-content:flex-start;"><i class="ti ti-calendar"></i> <span id="pDlcLbl">${e&&e.dlc?fr(e.dlc):'Choisir une date'}</span></button><div id="pDlcCal" style="display:none;"></div></div><div style="flex:3;"></div></div>
     <div class="form-actions">
       <button class="btn" data-act="addProd"><i class="ti ti-${e?'device-floppy':'plus'}"></i> ${e?'Enregistrer':'Ajouter le produit'}</button>
       ${e?`<button class="btn btn-ghost" data-act="cancelEdit"><i class="ti ti-x"></i> Annuler</button>`:""}
@@ -624,6 +627,10 @@ document.addEventListener("click",e=>{
     case"calPick":if(pick.open==='from'){dashP.from=t.dataset.d;}else{dashP.to=t.dataset.d;}pick.open=null;render();break;
     case"dashClear":dashP.from='';dashP.to='';pick.open=null;render();break;
     case"finUnlock":{const pin=(document.getElementById("finPin")||{}).value;if(pin===DB.settings.financePin){finOpen=true;render();}else{alert("Code incorrect.");}break;}
+    case"pdlcToggle":{const box=document.getElementById("pDlcCal");if(box){if(box.style.display==="none"||!box.style.display){pdlcOpen();}else{box.style.display="none";}}break;}
+    case"pdlcPrev":pdlc.m--;if(pdlc.m<0){pdlc.m=11;pdlc.y--;}pdlcDraw();break;
+    case"pdlcNext":pdlc.m++;if(pdlc.m>11){pdlc.m=0;pdlc.y++;}pdlcDraw();break;
+    case"pdlcPick":{const hid=document.getElementById("pDlc");if(hid)hid.value=t.dataset.d;const lbl=document.getElementById("pDlcLbl");if(lbl)lbl.textContent=fr(t.dataset.d);const box=document.getElementById("pDlcCal");if(box)box.style.display="none";break;}
     case"saveResto":{const n=v("resto").trim();if(!n){alert("Indiquez un nom.");return;}DB.settings.restaurant=n;save();view="ops";render();break;}
     case"demo":loadDemo();break;
     case"cancelEdit":edit={prod:null,sup:null};render();break;
